@@ -4,11 +4,20 @@ import sys
 import openai
 import subprocess
 import argparse
+import shlex
 from prettytable import PrettyTable
 
 
 class GCPMate:
     def __init__(self, openai_model = "text-davinci-003", skip_info = False):
+        """
+        Initializes a new instance of the GCPMate class with the specified OpenAI model and flag to skip runtime info.
+
+        Args:
+            openai_model (str): The name of the OpenAI model to use for generating gcloud commands.
+            skip_info (bool): Flag indicating whether or not to skip printing runtime info.
+        """
+
         self.current_user = subprocess.run(
             ['gcloud', 'auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -31,9 +40,17 @@ class GCPMate:
         self.skip_info = skip_info
 
     def blue_text(self, text):
+        """
+        Returns the specified text in blue for console output.
+        """
+
         return f"\033[94m{text}\033[0m"
 
     def get_yes_no(self, prompt):
+        """
+        Asks the user to confirm whether or not to execute a set of gcloud commands.
+        """
+
         while True:
             print(f"\n{self.blue_text('Fair warning')}: gcloud may prompt for yes/no confirmation.\n\t If so, execution process will respond with yes.\n")
             answer = input(f"Would you like to execute the following {self.blue_text(len(self.commands))} command(s)? [y/N] ").strip().lower()
@@ -45,6 +62,11 @@ class GCPMate:
                 print("Invalid input, please try again.")
 
     def call_openai_api(self, query):
+        """
+        Calls the OpenAI API to generate gcloud commands based on the specified query. Since returned output is a multiple-line string,
+        it is split into a list of commands and stored in the self.commands variable.
+        """
+
         try:
             response = openai.Completion.create(
                 model=self.openai_model,
@@ -69,6 +91,10 @@ class GCPMate:
         self.commands = [x.strip() for x in re.findall(r'(?:gcloud|gsutil)\b.*?(?:\n|$)', singleline_commands)]
 
     def print_runtime_info(self):
+        """
+        Prints runtime info about the current gcloud configuration.
+        """
+
         table = PrettyTable()
         table.field_names = ["Configuration", "Value"]
         table.add_row(["Active gcloud account", self.blue_text(self.current_user)])
@@ -79,7 +105,38 @@ class GCPMate:
         table.align = "l"
         print(table)
 
+    def execute_commands(self):
+        """
+        Executes the list of gcloud commands stored in the self.commands variable. If a command contains a prompt, 
+        it is executed with a default response of "y".If a command contains a pipe (|), it is split into two 
+        subcommands and executed as a pipeline. However, if command contains a pipe, and it contains a prompt, 
+        the command will not execute properly. This is a known issue and will be addressed in a future release.
+        """
+
+        for command in self.commands:
+            print(f"---\nExecuting: {self.blue_text(command)}")
+            if "|" in command:
+                subcommands = command.split("|")
+                if len(subcommands) > 2:
+                    print("Error: only 2 subcommands are supported at the moment. You can "
+                          "try to execute the command manually.")
+                    continue
+                subp1 = subprocess.Popen(shlex.split(subcommands[0]), stdout=subprocess.PIPE)
+                p1 = subprocess.run(shlex.split(subcommands[1]), check = True, stdin=subp1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subp1.stdout.close()
+            else:
+                p1 = subprocess.run(shlex.split(command), input='y'.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            print(f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+
     def run(self, query):
+        """
+        Main method to run GCPMate with the specified query.
+
+        Args:
+            query (str): The query to be passed to the OpenAI API.
+        """
+
         if not self.skip_info:
             self.print_runtime_info()  
         self.call_openai_api(query)
@@ -101,17 +158,8 @@ class GCPMate:
         if not doit:
             # placeholder for exit message
             return
-
-        for command in self.commands:
-            print(f"---\nExecuting: {self.blue_text(command)}")
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, input='y'.encode())
-            if result.stdout:
-                # gcloud uses stderr to print prompts, warnings and errors, so also include it in the response
-                # https://cloud.google.com/sdk/gcloud#use_of_stdout_and_stderr
-                print(f"---\nOperation completed. Result:\n\n{self.blue_text(result.stdout.decode('utf-8'))}\n{self.blue_text(result.stderr.decode('utf-8'))}")
-            else:
-                # nothing in result.stdout, command most likely failed, print stderr
-                print(f"---\nPlease read carefully:\n\n{result.stderr.decode('utf-8')}")
+        else:
+            self.execute_commands()
 
 
 if __name__ == '__main__':
