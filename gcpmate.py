@@ -18,24 +18,32 @@ class GCPMate:
             skip_info (bool): Flag indicating whether or not to skip printing runtime info.
         """
 
-        self.current_user = subprocess.run(
-            ['gcloud', 'auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).stdout.decode('utf-8').strip()
-        self.current_project = subprocess.run(
-            ['gcloud', 'config', 'get-value', 'project'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).stdout.decode('utf-8').strip()
-        self.default_region = subprocess.run(
-            ['gcloud', 'config', 'get-value', 'compute/region'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).stdout.decode('utf-8').strip()
-        self.default_region = "(unset)" if self.default_region == "" else self.default_region
-        self.default_zone = subprocess.run(
-            ['gcloud', 'config', 'get-value', 'compute/zone'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).stdout.decode('utf-8').strip()
-        self.default_zone = "(unset)" if self.default_zone == "" else self.default_zone
+        try:
+            self.current_user = subprocess.run(
+                ['gcloud', 'auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).stdout.decode('utf-8').strip()
+            self.current_project = subprocess.run(
+                ['gcloud', 'config', 'get-value', 'project'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).stdout.decode('utf-8').strip()
+            self.default_region = subprocess.run(
+                ['gcloud', 'config', 'get-value', 'compute/region'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).stdout.decode('utf-8').strip()
+            self.default_region = "(unset)" if self.default_region == "" else self.default_region
+            self.default_zone = subprocess.run(
+                ['gcloud', 'config', 'get-value', 'compute/zone'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).stdout.decode('utf-8').strip()
+            self.default_zone = "(unset)" if self.default_zone == "" else self.default_zone
+            self.gcloud_available = True
+        except FileNotFoundError:
+            self.current_user = "gcloud not found"
+            self.current_project = "gcloud not found"
+            self.default_region = "gcloud not found"
+            self.default_zone = "gcloud not found"
+            self.gcloud_available = False
         self.openai_model = openai_model
         self.skip_info = skip_info
 
@@ -86,6 +94,8 @@ class GCPMate:
         singleline_commands = response['choices'][0]['text'].replace('\\\n', '')
         # replace multiple spaces with single-space, if any found in the reply:
         singleline_commands = re.sub(' +', ' ', singleline_commands)
+        # replace command1 && command2 to two commands, if any found in the reply:
+        singleline_commands = singleline_commands.replace("&&", "\n")
 
         # split multiple commands to a list of commands
         self.commands = [x.strip() for x in re.findall(r'(?:gcloud|gsutil)\b.*?(?:\n|$)', singleline_commands)]
@@ -108,7 +118,7 @@ class GCPMate:
     def execute_commands(self):
         """
         Executes the list of gcloud commands stored in the self.commands variable. If a command contains a prompt, 
-        it is executed with a default response of "y".If a command contains a pipe (|), it is split into two 
+        it is executed with a default response of "y".If a command contains a pipe (|), it is split into 
         subcommands and executed as a pipeline. However, if command contains a pipe, and it contains a prompt, 
         the command will not execute properly. This is a known issue and will be addressed in a future release.
         """
@@ -117,17 +127,15 @@ class GCPMate:
             print(f"---\nExecuting: {self.blue_text(command)}")
             if "|" in command:
                 subcommands = command.split("|")
-                if len(subcommands) > 2:
-                    print("Error: only 2 subcommands are supported at the moment. You can "
-                          "try to execute the command manually.")
-                    continue
-                subp1 = subprocess.Popen(shlex.split(subcommands[0]), stdout=subprocess.PIPE)
-                p1 = subprocess.run(shlex.split(subcommands[1]), check = True, stdin=subp1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                subp1.stdout.close()
+                p = subprocess.Popen(shlex.split(subcommands[0]), stdout=subprocess.PIPE)
+                for c in subcommands[1:]:
+                    p1 = subprocess.Popen(shlex.split(c), stdout=subprocess.PIPE, stdin=p.stdout)
+                    p.stdout.close()
+                    p = p1
+                print(f"---\nResult:\n\n{self.blue_text(p.communicate()[0].decode('utf-8'))}")
             else:
                 p1 = subprocess.run(shlex.split(command), input='y'.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-            print(f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+                print(f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
 
     def run(self, query):
         """
@@ -154,7 +162,12 @@ class GCPMate:
             i += 1
             print(f'\t[{i}] {self.blue_text(command)}')
 
-        doit = self.get_yes_no(self.commands)
+        if self.gcloud_available:
+            doit = self.get_yes_no(self.commands)
+        else:
+            doit = False
+            print("gcloud is not found, bye. ")
+            return
         if not doit:
             # placeholder for exit message
             return
