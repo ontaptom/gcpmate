@@ -1,17 +1,17 @@
 import os
 import re
 import sys
-import openai
 import subprocess
 import argparse
 import shlex
 from prettytable import PrettyTable
+import openai
 
 
 class GCPMate:
-    def __init__(self, openai_model = "text-davinci-003", skip_info = False):
+    def __init__(self, openai_model="text-davinci-003", skip_info=False):
         """
-        Initializes a new instance of the GCPMate class with the specified OpenAI model and flag to skip runtime info.
+        Initializes a new instance of the GCPMate class with the specified OpenAI model.
 
         Args:
             openai_model (str): The name of the OpenAI model to use for generating gcloud commands.
@@ -20,21 +20,22 @@ class GCPMate:
 
         try:
             self.current_user = subprocess.run(
-                ['gcloud', 'auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                ['gcloud', 'auth', 'list', '--filter=status:ACTIVE',
+                    '--format=value(account)'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
             ).stdout.decode('utf-8').strip()
             self.current_project = subprocess.run(
                 ['gcloud', 'config', 'get-value', 'project'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
             ).stdout.decode('utf-8').strip()
             self.default_region = subprocess.run(
                 ['gcloud', 'config', 'get-value', 'compute/region'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
             ).stdout.decode('utf-8').strip()
             self.default_region = "(unset)" if self.default_region == "" else self.default_region
             self.default_zone = subprocess.run(
                 ['gcloud', 'config', 'get-value', 'compute/zone'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
             ).stdout.decode('utf-8').strip()
             self.default_zone = "(unset)" if self.default_zone == "" else self.default_zone
             self.gcloud_available = True
@@ -46,6 +47,7 @@ class GCPMate:
             self.gcloud_available = False
         self.openai_model = openai_model
         self.skip_info = skip_info
+        self.commands = []
 
     def blue_text(self, text):
         """
@@ -54,14 +56,15 @@ class GCPMate:
 
         return f"\033[94m{text}\033[0m"
 
-    def get_yes_no(self, prompt):
+    def get_yes_no(self):
         """
         Asks the user to confirm whether or not to execute a set of gcloud commands.
         """
 
         while True:
             print(f"\n{self.blue_text('Fair warning')}: gcloud may prompt for yes/no confirmation.\n\t If so, execution process will respond with yes.\n")
-            answer = input(f"Would you like to execute the following {self.blue_text(len(self.commands))} command(s)? [y/N] ").strip().lower()
+            answer = input(
+                f"Would you like to execute the following {self.blue_text(len(self.commands))} command(s)? [y/N] ").strip().lower()
             if answer in {"y", "yes"}:
                 return True
             elif answer in {"", "n", "no"}:
@@ -76,29 +79,39 @@ class GCPMate:
         """
 
         try:
+            full_query = f"""
+            Context: Provide only gcloud command as output.
+            Prompt: {query}
+            Command:
+            """
+
             response = openai.Completion.create(
                 model=self.openai_model,
-                prompt=f"# gcloud cli commands with new line:\n{query}:###",
+                prompt=full_query,
                 temperature=0,
                 max_tokens=350,
                 top_p=1.0,
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
-                stop=["#", "###"]
             )
-        except Exception as e:
-            print("Error with OpenAI API request: ", e)
+        except Exception as api_error:
+            print("Error with OpenAI API request: ", api_error)
             sys.exit(1)
 
         # remove \<new-line> in case if OpenAI returns gcloud in multiple lines
-        singleline_commands = response['choices'][0]['text'].replace('\\\n', '')
+        singleline_commands = response['choices'][0]['text'].replace(
+            '\\\n', '')
+        
         # replace multiple spaces with single-space, if any found in the reply:
         singleline_commands = re.sub(' +', ' ', singleline_commands)
-        # replace command1 && command2 to two commands, if any found in the reply:
-        singleline_commands = singleline_commands.replace("&&", "\n")
+
+        # Split gcloud commands separated by '&&' to separate lines, but ignore '&&' within parameter values.
+        # For example: [...] --metadata startup-script='sudo apt-get update && sudo apt-get install -y nginx'
+        singleline_commands = singleline_commands.replace("&& gcloud", "\n gcloud")
 
         # split multiple commands to a list of commands
-        self.commands = [x.strip() for x in re.findall(r'(?:gcloud|gsutil)\b.*?(?:\n|$)', singleline_commands)]
+        self.commands = [x.strip() for x in re.findall(
+            r'(?:gcloud|gsutil)\b.*?(?:\n|$)', singleline_commands)]
 
     def print_runtime_info(self):
         """
@@ -107,8 +120,10 @@ class GCPMate:
 
         table = PrettyTable()
         table.field_names = ["Configuration", "Value"]
-        table.add_row(["Active gcloud account", self.blue_text(self.current_user)])
-        table.add_row(["Default project", self.blue_text(self.current_project)])
+        table.add_row(["Active gcloud account",
+                      self.blue_text(self.current_user)])
+        table.add_row(
+            ["Default project", self.blue_text(self.current_project)])
         table.add_row(["Default region", self.blue_text(self.default_region)])
         table.add_row(["Default zone", self.blue_text(self.default_zone)])
         table.add_row(["OpenAI model", self.blue_text(self.openai_model)])
@@ -127,15 +142,20 @@ class GCPMate:
             print(f"---\nExecuting: {self.blue_text(command)}")
             if "|" in command:
                 subcommands = command.split("|")
-                p = subprocess.Popen(shlex.split(subcommands[0]), stdout=subprocess.PIPE)
+                p = subprocess.Popen(shlex.split(
+                    subcommands[0]), stdout=subprocess.PIPE)
                 for c in subcommands[1:]:
-                    p1 = subprocess.Popen(shlex.split(c), stdout=subprocess.PIPE, stdin=p.stdout)
+                    p1 = subprocess.Popen(shlex.split(
+                        c), stdout=subprocess.PIPE, stdin=p.stdout)
                     p.stdout.close()
                     p = p1
-                print(f"---\nResult:\n\n{self.blue_text(p.communicate()[0].decode('utf-8'))}")
+                print(
+                    f"---\nResult:\n\n{self.blue_text(p.communicate()[0].decode('utf-8'))}")
             else:
-                p1 = subprocess.run(shlex.split(command), input='y'.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                print(f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+                p1 = subprocess.run(shlex.split(command), input='y'.encode(
+                ), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                print(
+                    f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
 
     def run(self, query):
         """
@@ -146,7 +166,7 @@ class GCPMate:
         """
 
         if not self.skip_info:
-            self.print_runtime_info()  
+            self.print_runtime_info()
         self.call_openai_api(query)
 
         if len(self.commands) == 0:
@@ -156,14 +176,15 @@ class GCPMate:
             # finish script at this point
             return
 
-        print(f"The proposed solution consist of {len(self.commands)} command(s):")
+        print(
+            f"The proposed solution consist of {len(self.commands)} command(s):")
         i = 0
         for command in self.commands:
             i += 1
             print(f'\t[{i}] {self.blue_text(command)}')
 
         if self.gcloud_available:
-            doit = self.get_yes_no(self.commands)
+            doit = self.get_yes_no()
         else:
             doit = False
             print("gcloud is not found, bye. ")
@@ -190,16 +211,20 @@ if __name__ == '__main__':
                                      'Describe in query what you wish to achieve, and gcpmate '
                                      '(with a little help from OpenAI) will try to come up with a solution.\n'
                                      'If you like proposed outcome, gcpmate can also '
-                                     'handle execution!', add_help=True, 
-                                     formatter_class=argparse.RawTextHelpFormatter, 
+                                     'handle execution!', add_help=True,
+                                     formatter_class=argparse.RawTextHelpFormatter,
                                      epilog='Example usage:\n\ngcpmate "create new project called '
                                      'my-superb-new-project"')
-    parser.add_argument('query', type=str, help='Query explaining what you wish to achieve in GCP')
+    parser.add_argument(
+        'query', type=str, help='Query explaining what you wish to achieve in GCP')
     parser.add_argument('-m', '--model', type=str, help='OpenAI model to use for completion. Default: text-davinci-003. '
                         'Also available: code-davinci-002')
-    parser.add_argument('-s', '--skip-info', action='store_true', help='Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)')
+    parser.add_argument('-s', '--skip-info', action='store_true',
+                        help='Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)')
     args = parser.parse_args()
     skip_info = args.skip_info
 
-    gcpmate = GCPMate(openai_model=args.model, skip_info = skip_info) if args.model else GCPMate(skip_info = skip_info)
-    gcpmate.run(sys.argv[1])
+    gcpmate = GCPMate(openai_model=args.model,
+                      skip_info=skip_info) if args.model else GCPMate(skip_info=skip_info)
+
+    gcpmate.run(args.query)
