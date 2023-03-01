@@ -72,19 +72,13 @@ class GCPMate:
             else:
                 print("Invalid input, please try again.")
 
-    def call_openai_api(self, query):
+    def call_openai_api(self, full_query):
         """
         Calls the OpenAI API to generate gcloud commands based on the specified query. Since returned output is a multiple-line string,
         it is split into a list of commands and stored in the self.commands variable.
         """
 
         try:
-            full_query = f"""
-            Context: Provide only gcloud command as output.
-            Prompt: {query}
-            Command:
-            """
-
             response = openai.Completion.create(
                 model=self.openai_model,
                 prompt=full_query,
@@ -98,10 +92,19 @@ class GCPMate:
             print("Error with OpenAI API request: ", api_error)
             sys.exit(1)
 
+        return response['choices'][0]['text']
+
+    def generate_commands(self, api_response):
+        """
+        Assuming api_response contains list of gcloud commands. This method removes unnecessary 
+        characters from the OpenAI API response, splits the response into a list of 
+        commands, and stores the list in the self.commands variable.
+        """
+
         # remove \<new-line> in case if OpenAI returns gcloud in multiple lines
-        singleline_commands = response['choices'][0]['text'].replace(
+        singleline_commands = api_response.replace(
             '\\\n', '')
-        
+
         # replace multiple spaces with single-space, if any found in the reply:
         singleline_commands = re.sub(' +', ' ', singleline_commands)
 
@@ -109,8 +112,8 @@ class GCPMate:
         # For example: [...] --metadata startup-script='sudo apt-get update && sudo apt-get install -y nginx'
         singleline_commands = singleline_commands.replace("&& gcloud", "\n gcloud")
 
-        # split multiple commands to a list of commands
-        self.commands = [x.strip() for x in re.findall(
+        # split multiple commands to a list of commands and return the list
+        return [x.strip() for x in re.findall(
             r'(?:gcloud|gsutil)\b.*?(?:\n|$)', singleline_commands)]
 
     def print_runtime_info(self):
@@ -165,9 +168,21 @@ class GCPMate:
             query (str): The query to be passed to the OpenAI API.
         """
 
+        full_query = f"""
+            Context: Provide only gcloud command as output.
+            Prompt: {query}
+            Command: gcloud
+            """
+
         if not self.skip_info:
             self.print_runtime_info()
-        self.call_openai_api(query)
+
+        # call OpenAI API
+        api_response = self.call_openai_api(full_query)
+
+        # generate list of commands from the API response
+        self.commands = self.generate_commands(api_response)
+
 
         if len(self.commands) == 0:
             print("I'm sorry. Your question did not return any potential solution.\n"
@@ -222,9 +237,9 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--skip-info', action='store_true',
                         help='Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)')
     args = parser.parse_args()
-    skip_info = args.skip_info
 
-    gcpmate = GCPMate(openai_model=args.model,
-                      skip_info=skip_info) if args.model else GCPMate(skip_info=skip_info)
+    model = args.model if args.model else "text-davinci-003"
+
+    gcpmate = GCPMate(openai_model=model, skip_info=args.skip_info)
 
     gcpmate.run(args.query)
