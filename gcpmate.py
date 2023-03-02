@@ -72,7 +72,7 @@ class GCPMate:
             else:
                 print("Invalid input, please try again.")
 
-    def call_openai_api(self, full_query):
+    def call_openai_api(self, query):
         """
         Calls the OpenAI API to generate gcloud commands based on the specified query. Since returned output is a multiple-line string,
         it is split into a list of commands and stored in the self.commands variable.
@@ -81,7 +81,7 @@ class GCPMate:
         try:
             response = openai.Completion.create(
                 model=self.openai_model,
-                prompt=full_query,
+                prompt=query,
                 temperature=0,
                 max_tokens=350,
                 top_p=1.0,
@@ -152,13 +152,26 @@ class GCPMate:
                         c), stdout=subprocess.PIPE, stdin=p.stdout)
                     p.stdout.close()
                     p = p1
-                print(
-                    f"---\nResult:\n\n{self.blue_text(p.communicate()[0].decode('utf-8'))}")
+                try:
+                    output = p.communicate()[0].decode('utf-8')
+                    print(f"---\nResult:\n\n{self.blue_text(output)}")
+                except subprocess.CalledProcessError as process_error:
+                    print(f"---\nError: {process_error.stderr.decode('utf-8')}")
             else:
-                p1 = subprocess.run(shlex.split(command), input='y'.encode(
-                ), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-                print(
-                    f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+                try:
+                    p1 = subprocess.run(shlex.split(command), input='y'.encode(
+                    ), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                    print(
+                        f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+                except subprocess.CalledProcessError as process_error:
+                    print(f"---\nError: {process_error.stderr.decode('utf-8')}")
+
+    def explain(self,query):
+        """
+        Explain the query to the user
+        """
+        response = gcpmate.call_openai_api(query)
+        print(self.blue_text(response))
 
     def run(self, query):
         """
@@ -168,17 +181,11 @@ class GCPMate:
             query (str): The query to be passed to the OpenAI API.
         """
 
-        full_query = f"""
-            Context: Provide only gcloud command as output.
-            Prompt: {query}
-            Command: gcloud
-            """
-
         if not self.skip_info:
             self.print_runtime_info()
 
         # call OpenAI API
-        api_response = self.call_openai_api(full_query)
+        api_response = self.call_openai_api(query)
 
         # generate list of commands from the API response
         self.commands = self.generate_commands(api_response)
@@ -236,10 +243,25 @@ if __name__ == '__main__':
                         'Also available: code-davinci-002')
     parser.add_argument('-s', '--skip-info', action='store_true',
                         help='Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)')
+    parser.add_argument('-e', '--explain', action='store_true',
+                        help='Returns explanation to given query, which can be command, error message, etc.')
     args = parser.parse_args()
 
     model = args.model if args.model else "text-davinci-003"
 
     gcpmate = GCPMate(openai_model=model, skip_info=args.skip_info)
+    if args.explain:
+        full_query = f"""
+            Context: Explain the following.
+            Prompt: {args.query}
+            Explaination:
+            """
+        gcpmate.explain(full_query)
+    else:
+        full_query = f"""
+                Context: Provide only gcloud command as output.
+                Prompt: {args.query}
+                Command: gcloud
+                """
 
-    gcpmate.run(args.query)
+        gcpmate.run(full_query)
