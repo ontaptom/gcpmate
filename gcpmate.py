@@ -4,6 +4,7 @@ import sys
 import subprocess
 import argparse
 import shlex
+from time import sleep
 from prettytable import PrettyTable
 import openai
 
@@ -55,6 +56,16 @@ class GCPMate:
         """
 
         return f"\033[94m{text}\033[0m"
+    
+    def animate(self, text):
+        """
+        Animates the specified text in the console.
+        """
+
+        for char in text:
+            sleep(0.05)
+            print(char, end='', flush=True)
+        print()
 
     def get_yes_no(self):
         """
@@ -62,9 +73,11 @@ class GCPMate:
         """
 
         while True:
-            print(f"\n{self.blue_text('Fair warning')}: gcloud may prompt for yes/no confirmation.\n\t If so, execution process will respond with yes.\n")
+            print(f"\n{self.blue_text('Fair warning')}: gcloud may prompt for yes/no "
+                  "confirmation.\n\t If so, execution process will respond with yes.\n")
             answer = input(
-                f"Would you like to execute the following {self.blue_text(len(self.commands))} command(s)? [y/N] ").strip().lower()
+                f"Would you like to execute the following {self.blue_text(len(self.commands))} "
+                 "command(s)? [y/N] ").strip().lower()
             if answer in {"y", "yes"}:
                 return True
             elif answer in {"", "n", "no"}:
@@ -74,8 +87,9 @@ class GCPMate:
 
     def call_openai_api(self, query):
         """
-        Calls the OpenAI API to generate gcloud commands based on the specified query. Since returned output is a multiple-line string,
-        it is split into a list of commands and stored in the self.commands variable.
+        Calls the OpenAI API to generate gcloud commands based on the specified query. 
+        Since returned output is a multiple-line string, it is split into a list of 
+        commands and stored in the self.commands variable.
         """
 
         try:
@@ -108,8 +122,9 @@ class GCPMate:
         # replace multiple spaces with single-space, if any found in the reply:
         singleline_commands = re.sub(' +', ' ', singleline_commands)
 
-        # Split gcloud commands separated by '&&' to separate lines, but ignore '&&' within parameter values.
-        # For example: [...] --metadata startup-script='sudo apt-get update && sudo apt-get install -y nginx'
+        # Split gcloud commands separated by '&&' to separate lines, but ignore '&&'
+        # within parameter values. For example:
+        # [...] --metadata startup-script='sudo apt-get update && sudo apt-get install -y nginx'
         singleline_commands = singleline_commands.replace("&& gcloud", "\n gcloud")
 
         # split multiple commands to a list of commands and return the list
@@ -135,10 +150,11 @@ class GCPMate:
 
     def execute_commands(self):
         """
-        Executes the list of gcloud commands stored in the self.commands variable. If a command contains a prompt, 
-        it is executed with a default response of "y".If a command contains a pipe (|), it is split into 
-        subcommands and executed as a pipeline. However, if command contains a pipe, and it contains a prompt, 
-        the command will not execute properly. This is a known issue and will be addressed in a future release.
+        Executes the list of gcloud commands stored in the self.commands variable. If a command 
+        contains a prompt, it is executed with a default response of "y".If a command contains 
+        a pipe (|), it is split into subcommands and executed as a pipeline. However, if command 
+        contains a pipe, and it contains a prompt, the command will not execute properly. 
+        This is a known issue and will be addressed in a future release.
         """
 
         for command in self.commands:
@@ -162,7 +178,8 @@ class GCPMate:
                     p1 = subprocess.run(shlex.split(command), input='y'.encode(
                     ), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
                     print(
-                        f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n{self.blue_text(p1.stderr.decode('utf-8'))}")
+                        f"---\nResult:\n\n{self.blue_text(p1.stdout.decode('utf-8'))}\n"
+                        f"{self.blue_text(p1.stderr.decode('utf-8'))}")
                 except subprocess.CalledProcessError as process_error:
                     print(f"---\nError: {process_error.stderr.decode('utf-8')}")
 
@@ -171,7 +188,8 @@ class GCPMate:
         Explain the query to the user
         """
         response = gcpmate.call_openai_api(query)
-        print(self.blue_text(response))
+        response = response.lstrip() + "\n" # response sometimes contains unnecessary leading spaces
+        self.animate(self.blue_text(response))
 
     def run(self, query):
         """
@@ -203,7 +221,7 @@ class GCPMate:
         i = 0
         for command in self.commands:
             i += 1
-            print(f'\t[{i}] {self.blue_text(command)}')
+            self.animate(f'\t[{i}] {self.blue_text(command)}')
 
         if self.gcloud_available:
             doit = self.get_yes_no()
@@ -221,7 +239,7 @@ class GCPMate:
 if __name__ == '__main__':
     openai_api_key = os.environ.get('OPENAI_API_KEY')
     if not openai_api_key:
-        print("GCPMate uses OpenAI API to assist user with Google Cloud management. To use this tool "
+        print("GCPMate uses OpenAI API to assist user with Google Cloud mgmt. To use this tool "
               "please set OPENAI_API_KEY environment variable to your OpenAI API key.\n"
               "You can get your API key from https://platform.openai.com/account/api-keys. "
               "To set the environment variable, run the following command:\n\n"
