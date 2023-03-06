@@ -187,7 +187,7 @@ class GCPMate:
         """
         Explain the query to the user
         """
-        response = gcpmate.call_openai_api(query)
+        response = self.call_openai_api(query)
         response = response.lstrip() + "\n" # response sometimes contains unnecessary leading spaces
         self.animate(self.blue_text(response))
 
@@ -235,8 +235,9 @@ class GCPMate:
         else:
             self.execute_commands()
 
-
-if __name__ == '__main__':
+def main():
+    """ Main function to run GCPMate."""
+    
     openai_api_key = os.environ.get('OPENAI_API_KEY')
     if not openai_api_key:
         print("GCPMate uses OpenAI API to assist user with Google Cloud mgmt. To use this tool "
@@ -283,3 +284,6 @@ if __name__ == '__main__':
                 """
 
         gcpmate.run(full_query)
+
+if __name__ == '__main__':
+    main()
