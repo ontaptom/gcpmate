@@ -73,8 +73,9 @@ class GCPMate:
         """
 
         while True:
-            print(f"\n{self.blue_text('Fair warning')}: gcloud may prompt for yes/no "
-                  "confirmation.\n\t If so, execution process will respond with yes.\n")
+            print(f"\n{self.blue_text('Fair warning')}: Execute the command(s) only if "
+                  "fully understand the consequences. \n\t gcloud may prompt for yes/no "
+                  "confirmation. If so, execution process will respond with yes.\n")
             answer = input(
                 f"Would you like to execute the following {self.blue_text(len(self.commands))} "
                  "command(s)? [y/N] ").strip().lower()
