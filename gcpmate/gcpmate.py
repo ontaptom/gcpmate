@@ -73,9 +73,10 @@ class GCPMate:
         """
 
         while True:
-            print(f"\n{self.blue_text('Fair warning')}: Execute the command(s) only if "
-                  "fully understand the consequences. \n\t gcloud may prompt for yes/no "
-                  "confirmation. If so, execution process will respond with yes.\n")
+            if not self.skip_info:
+                print(f"\n{self.blue_text('Fair warning')}: Execute the command(s) only if "
+                    "fully understand the consequences. \n\t gcloud may prompt for yes/no "
+                    "confirmation. If so, execution process will respond with yes.\n")
             answer = input(
                 f"Would you like to execute the following {self.blue_text(len(self.commands))} "
                  "command(s)? [y/N] ").strip().lower()
@@ -159,7 +160,7 @@ class GCPMate:
         """
 
         for command in self.commands:
-            print(f"---\nExecuting: {self.blue_text(command)}")
+            print(f"---\nExecuting: {self.blue_text(self.multiline_command(command))}")
             if "|" in command:
                 subcommands = command.split("|")
                 p = subprocess.Popen(shlex.split(
@@ -183,6 +184,23 @@ class GCPMate:
                         f"{self.blue_text(p1.stderr.decode('utf-8'))}")
                 except subprocess.CalledProcessError as process_error:
                     print(f"---\nError: {process_error.stderr.decode('utf-8')}")
+
+    def multiline_command(self, command):
+        """
+        Check if command is 100 characters or more, if so, it adds ' \\ \n\t'
+        at the nearest space to the n * 100th character. This is to print command
+        in multiple lines in the terminal.
+        """
+
+        if len(command) < 100:
+            return command
+        else:
+            lines = []
+            while len(command) > 100:
+                lines.append(command[:command[:100].rfind(' ')] + ' \\ \n\t')
+                command = command[command[:100].rfind(' ')+1:]
+            lines.append(command) # add the last line
+            return ''.join(lines)
 
     def explain(self,query):
         """
@@ -222,7 +240,7 @@ class GCPMate:
         i = 0
         for command in self.commands:
             i += 1
-            self.animate(f'\t[{i}] {self.blue_text(command)}')
+            self.animate(f'\t[{i}] {self.blue_text(self.multiline_command(command))}')
 
         if self.gcloud_available:
             doit = self.get_yes_no()
@@ -262,7 +280,7 @@ def main():
     parser.add_argument('-m', '--model', type=str, help='OpenAI model to use for completion. Default: text-davinci-003. '
                         'Also available: code-davinci-002')
     parser.add_argument('-s', '--skip-info', action='store_true',
-                        help='Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)')
+                        help='Skip printing "Fair warning" message and runtime info (gcloud account, project, region, zone, OpenAI model)')
     parser.add_argument('-e', '--explain', action='store_true',
                         help='Returns explanation to given query, which can be command, error message, etc.')
     args = parser.parse_args()
