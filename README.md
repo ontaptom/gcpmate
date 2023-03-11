@@ -59,6 +59,9 @@ gcpmate --explain "Why I cannot connect to my VM over ssh?"
 gcpmate -e " gcloud compute instances create newvm --project superproject324 --zone us-central1-a --image-family ubuntu-1804-lts --image-project ubuntu-os-cloud"
 # this query will return explaination what that command would do.
 ```
+
+<img src="./images/explain_command.svg">
+
 ## Options
 
 GCPMate supports several command-line options:
