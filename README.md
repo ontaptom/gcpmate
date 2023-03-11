@@ -25,17 +25,13 @@ gcpmate "<your query>"
 
 Where `<your query>` is a description of what you want to achieve in GCP.
 
-<img src="./images/list_vms.svg">
-
-To get an explanation for a command, error or even custom query, you can use the following command:
+To get an explanation for a command, error or even a custom query, you can use the following command:
 
 ```bash
 gcpmate --explain "your query"
 ```
 
 Replace "your query" with the text you want to explain. Be sure to use single quotes if your query contains double quotes, and vice versa.
-
-<img src="./images/explain.svg">
 
 ## Examples
 
@@ -57,10 +53,8 @@ gcpmate --explain "Why I cannot connect to my VM over ssh?"
 
 ```bash
 gcpmate -e " gcloud compute instances create newvm --project superproject324 --zone us-central1-a --image-family ubuntu-1804-lts --image-project ubuntu-os-cloud"
-# this query will return explaination what that command would do.
+# this query will return explanation what that command would do.
 ```
-
-<img src="./images/explain_command.svg">
 
 ## Options
 

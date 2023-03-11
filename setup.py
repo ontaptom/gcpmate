@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='gcpmate',
-    version='1.0.0',
+    version='1.0.1',
     author='Tomek Porozynski',
     author_email='tomasz.porozynski@gmail.com',
     description=(
@@ -21,7 +21,7 @@ setup(
     },
     classifiers=[
         'Programming Language :: Python :: 3',
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX :: Linux',
     ],
     long_description=open('README.md').read(),
