@@ -1,3 +1,10 @@
+"""
+GCPMate - Google Cloud Platform assistant.
+
+This module provides functions and classes to assist with managing 
+Google Cloud Platform using natural language queries and OpenAI's GPT-3 language model.
+"""
+
 import os
 import re
 import sys
@@ -10,6 +17,10 @@ import openai
 
 
 class GCPMate:
+    """
+    GCPMate is an OpenAI-powered assistant for managing Google Cloud Platform resources.
+    """
+    
     def __init__(self, openai_model="text-davinci-003", skip_info=False):
         """
         Initializes a new instance of the GCPMate class with the specified OpenAI model.
@@ -160,7 +171,7 @@ class GCPMate:
         """
 
         for command in self.commands:
-            print(f"---\nExecuting: {self.blue_text(self.multiline_command(command))}")
+            print(f"---\nExecuting: {self.blue_text(self.multiline_output(command))}")
             if "|" in command:
                 subcommands = command.split("|")
                 p = subprocess.Popen(shlex.split(
@@ -185,9 +196,9 @@ class GCPMate:
                 except subprocess.CalledProcessError as process_error:
                     print(f"---\nError: {process_error.stderr.decode('utf-8')}")
 
-    def multiline_command(self, command):
+    def multiline_output(self, command, sep=' \\ \n\t'):
         """
-        Check if command is 100 characters or more, if so, it adds ' \\ \n\t'
+        Check if command is 100 characters or more, if so, it adds ' \\ \n\t' or other separator
         at the nearest space to the n * 100th character. This is to print command
         in multiple lines in the terminal.
         """
@@ -197,7 +208,7 @@ class GCPMate:
         else:
             lines = []
             while len(command) > 100:
-                lines.append(command[:command[:100].rfind(' ')] + ' \\ \n\t')
+                lines.append(command[:command[:100].rfind(' ')] + sep)
                 command = command[command[:100].rfind(' ')+1:]
             lines.append(command) # add the last line
             return ''.join(lines)
@@ -208,7 +219,7 @@ class GCPMate:
         """
         response = self.call_openai_api(query)
         response = response.lstrip() + "\n" # response sometimes contains unnecessary leading spaces
-        self.animate(self.blue_text(response))
+        self.animate(self.blue_text(self.multiline_output(response, sep="\n")))
 
     def run(self, query):
         """
@@ -240,7 +251,7 @@ class GCPMate:
         i = 0
         for command in self.commands:
             i += 1
-            self.animate(f'\t[{i}] {self.blue_text(self.multiline_command(command))}')
+            self.animate(f'\t[{i}] {self.blue_text(self.multiline_output(command))}')
 
         if self.gcloud_available:
             doit = self.get_yes_no()

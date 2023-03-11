@@ -17,7 +17,7 @@ export OPENAI_API_KEY=<your-api-key>
 
 ## Usage
 
-To use GCPMate, simply run:
+GCPMate will use OpenAI's language models to understand your query, and then generate a series of GCP command-line instructions for you to execute. If you like the proposed outcome, GCPMate can also execute the commands for you! To use GCPMate, simply run:
 
 ```bash
 gcpmate "<your query>"
@@ -27,7 +27,15 @@ Where `<your query>` is a description of what you want to achieve in GCP.
 
 <img src="./images/list_vms.svg">
 
-GCPMate will use OpenAI's language models to understand your query, and then generate a series of GCP command-line instructions for you to execute. If you like the proposed outcome, GCPMate can also execute the commands for you!
+To get an explanation for a command, error or even custom query, you can use the following command:
+
+```bash
+gcpmate --explain "your query"
+```
+
+Replace "your query" with the text you want to explain. Be sure to use single quotes if your query contains double quotes, and vice versa.
+
+<img src="./images/explain.svg">
 
 ## Examples
 
@@ -57,7 +65,7 @@ GCPMate supports several command-line options:
 ```bash
 gcpmate -h  # Show the help message and exit
 gcpmate -m <model>  # Specify the OpenAI model to use (default: text-davinci-003)
-gcpmate -s  # Skip printing runtime info (gcloud account, project, region, zone, OpenAI model)
+gcpmate -s  # Skip printing "Fair warning" and runtime info (gcloud account, project, region, zone, OpenAI model)
 gcpmate -e  # Return explanation to given query, which can be command, error message, etc.
 ```
 
