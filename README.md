@@ -61,7 +61,7 @@ gcpmate -e " gcloud compute instances create newvm --project superproject324 --z
 GCPMate supports several command-line options:
 ```bash
 gcpmate -h  # Show the help message and exit
-gcpmate -m <model>  # Specify the OpenAI model to use (default: text-davinci-003)
+gcpmate -m <model>  # Specify the OpenAI model to use (default: gpt-3.5-turbo)
 gcpmate -s  # Skip printing "Fair warning" and runtime info (gcloud account, project, region, zone, OpenAI model)
 gcpmate -e  # Return explanation to given query, which can be command, error message, etc.
 ```

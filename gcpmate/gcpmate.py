@@ -14,6 +14,7 @@ import shlex
 from time import sleep
 from prettytable import PrettyTable
 import openai
+from openai import OpenAI
 
 
 class GCPMate:
@@ -21,7 +22,7 @@ class GCPMate:
     GCPMate is an OpenAI-powered assistant for managing Google Cloud Platform resources.
     """
     
-    def __init__(self, openai_model="text-davinci-003", skip_info=False):
+    def __init__(self, openai_model="gpt-3.5-turbo", skip_info=False):
         """
         Initializes a new instance of the GCPMate class with the specified OpenAI model.
 
@@ -60,6 +61,7 @@ class GCPMate:
         self.openai_model = openai_model
         self.skip_info = skip_info
         self.commands = []
+        self.client = OpenAI()
 
     def blue_text(self, text):
         """
@@ -98,28 +100,22 @@ class GCPMate:
             else:
                 print("Invalid input, please try again.")
 
-    def call_openai_api(self, query):
+    def call_openai_api(self, query, system_content):
         """
         Calls the OpenAI API to generate gcloud commands based on the specified query. 
         Since returned output is a multiple-line string, it is split into a list of 
         commands and stored in the self.commands variable.
         """
 
-        try:
-            response = openai.Completion.create(
-                model=self.openai_model,
-                prompt=query,
-                temperature=0,
-                max_tokens=350,
-                top_p=1.0,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-            )
-        except Exception as api_error:
-            print("Error with OpenAI API request: ", api_error)
-            sys.exit(1)
+        completion = self.client.chat.completions.create(
+        model=self.openai_model,
+        messages=[
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": query}
+        ]
+        )
 
-        return response['choices'][0]['text']
+        return completion.choices[0].message.content
 
     def generate_commands(self, api_response):
         """
@@ -213,15 +209,15 @@ class GCPMate:
             lines.append(command) # add the last line
             return ''.join(lines)
 
-    def explain(self,query):
+    def explain(self,query, system_content):
         """
         Explain the query to the user
         """
-        response = self.call_openai_api(query)
+        response = self.call_openai_api(query, system_content)
         response = response.lstrip() + "\n" # response sometimes contains unnecessary leading spaces
         self.animate(self.blue_text(self.multiline_output(response, sep="\n")))
 
-    def run(self, query):
+    def run(self, query, system_content):
         """
         Main method to run GCPMate with the specified query.
 
@@ -233,7 +229,7 @@ class GCPMate:
             self.print_runtime_info()
 
         # call OpenAI API
-        api_response = self.call_openai_api(query)
+        api_response = self.call_openai_api(query, system_content)
 
         # generate list of commands from the API response
         self.commands = self.generate_commands(api_response)
@@ -288,32 +284,29 @@ def main():
                                      'my-superb-new-project"')
     parser.add_argument(
         'query', type=str, help='Query explaining what you wish to achieve in GCP')
-    parser.add_argument('-m', '--model', type=str, help='OpenAI model to use for completion. Default: text-davinci-003. '
-                        'Also available: code-davinci-002')
+    parser.add_argument('-m', '--model', type=str, help='OpenAI model to use for completion. Default: gpt-3.5-turbo. ')
     parser.add_argument('-s', '--skip-info', action='store_true',
                         help='Skip printing "Fair warning" message and runtime info (gcloud account, project, region, zone, OpenAI model)')
     parser.add_argument('-e', '--explain', action='store_true',
                         help='Returns explanation to given query, which can be command, error message, etc.')
     args = parser.parse_args()
 
-    model = args.model if args.model else "text-davinci-003"
+    model = args.model if args.model else "gpt-3.5-turbo"
 
     gcpmate = GCPMate(openai_model=model, skip_info=args.skip_info)
     if args.explain:
-        full_query = f"""
-            Context: Explain the following.
-            Prompt: {args.query}
-            Explaination:
-            """
-        gcpmate.explain(full_query)
+        system_content = '''
+            You are an assistant that explains given gcloud or GSutil or any error message from Google Cloud command & api. 
+            '''
+        gcpmate.explain(args.query, system_content)
     else:
-        full_query = f"""
-                Context: Provide only gcloud command as output.
-                Prompt: {args.query}
-                Command: gcloud
-                """
+        system_content = '''
+            You are an assistant that provides Google Cloud Platform (GCP) command-line instructions using `gcloud` / `qsutil` / `bq` commands. 
+            Respond to user queries with the appropriate `gcloud` command or a series of commands, each command presented on a new line. 
+            Provide these commands without any comments or explanations. Output must contain only commands, no explaination.
+            '''
 
-        gcpmate.run(full_query)
+        gcpmate.run(args.query, system_content)
 
 if __name__ == '__main__':
     main()
