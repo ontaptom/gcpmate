@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='gcpmate',
-    version='1.0.1',
+    version='1.0.2',
     author='Tomek Porozynski',
     author_email='tomasz.porozynski@gmail.com',
     description=(
@@ -11,7 +11,7 @@ setup(
     ),
     packages=find_packages(),
     install_requires=[
-        'openai~=0.27.0',
+        'openai~=1.1.1',
         'prettytable~=3.6.0',
     ],
     entry_points={
